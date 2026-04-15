@@ -177,7 +177,7 @@ async function sendQ() {
   try {
     const resp = await fetch(wurl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify({ question, geminiKey: gkey, history: history.slice(-6) })
     });
     const data = await resp.json();
