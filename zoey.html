@@ -132,18 +132,32 @@
 <script>
 let history = [];
 
+// Use cookies for persistent storage — Safari PWA clears localStorage
+function setCookie(name, value, days) {
+  const d = new Date();
+  d.setTime(d.getTime() + (days * 24 * 60 * 60 * 1000));
+  document.cookie = name + '=' + encodeURIComponent(value) + ';expires=' + d.toUTCString() + ';path=/;SameSite=Lax';
+}
+
+function getCookie(name) {
+  const match = document.cookie.split(';').map(c => c.trim()).find(c => c.startsWith(name + '='));
+  return match ? decodeURIComponent(match.split('=')[1]) : '';
+}
+
 function saveSetup() {
   const key = document.getElementById('gkey').value.trim();
   const url = document.getElementById('wurl').value.trim();
   if (!key || !url) { alert('Please fill in both fields.'); return; }
-  localStorage.setItem('z_gkey', key);
-  localStorage.setItem('z_wurl', url);
+  setCookie('z_gkey', key, 365);
+  setCookie('z_wurl', url, 365);
+  // Also try localStorage as backup
+  try { localStorage.setItem('z_gkey', key); localStorage.setItem('z_wurl', url); } catch(e) {}
   showChat();
 }
 
 function openSetup() {
-  document.getElementById('gkey').value = localStorage.getItem('z_gkey') || '';
-  document.getElementById('wurl').value = localStorage.getItem('z_wurl') || '';
+  document.getElementById('gkey').value = getCookie('z_gkey') || '';
+  document.getElementById('wurl').value = getCookie('z_wurl') || '';
   document.getElementById('setup').style.display = 'flex';
   document.getElementById('chat').style.display = 'none';
 }
@@ -154,7 +168,7 @@ function showChat() {
 }
 
 window.onload = () => {
-  if (localStorage.getItem('z_gkey') && localStorage.getItem('z_wurl')) showChat();
+  if (getCookie('z_gkey') && getCookie('z_wurl')) showChat();
 };
 
 async function sendQ() {
@@ -162,8 +176,8 @@ async function sendQ() {
   const question = inp.value.trim();
   if (!question) return;
 
-  const gkey = localStorage.getItem('z_gkey');
-  const wurl = localStorage.getItem('z_wurl');
+  const gkey = getCookie('z_gkey');
+  const wurl = getCookie('z_wurl');
   if (!gkey || !wurl) { openSetup(); return; }
 
   inp.value = '';
