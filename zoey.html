@@ -132,32 +132,64 @@
 <script>
 let history = [];
 
-// Use cookies for persistent storage — Safari PWA clears localStorage
-function setCookie(name, value, days) {
-  const d = new Date();
-  d.setTime(d.getTime() + (days * 24 * 60 * 60 * 1000));
-  document.cookie = name + '=' + encodeURIComponent(value) + ';expires=' + d.toUTCString() + ';path=/;SameSite=Lax';
+// ── PERSISTENT STORAGE: IndexedDB with localStorage fallback ──
+const DB_NAME = 'FarmBrainDB', DB_STORE = 'settings', DB_VER = 1;
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VER);
+    req.onupgradeneeded = e => e.target.result.createObjectStore(DB_STORE);
+    req.onsuccess = e => resolve(e.target.result);
+    req.onerror = () => reject(req.error);
+  });
 }
 
-function getCookie(name) {
-  const match = document.cookie.split(';').map(c => c.trim()).find(c => c.startsWith(name + '='));
-  return match ? decodeURIComponent(match.split('=')[1]) : '';
+async function dbSet(key, value) {
+  try {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(DB_STORE, 'readwrite');
+      tx.objectStore(DB_STORE).put(value, key);
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch(e) {
+    try { localStorage.setItem(key, value); } catch(e2) {}
+  }
 }
 
-function saveSetup() {
+async function dbGet(key) {
+  try {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(DB_STORE, 'readonly');
+      const req = tx.objectStore(DB_STORE).get(key);
+      req.onsuccess = () => resolve(req.result || '');
+      req.onerror = () => reject(req.error);
+    });
+  } catch(e) {
+    return localStorage.getItem(key) || '';
+  }
+}
+
+async function saveSetup() {
   const key = document.getElementById('gkey').value.trim();
   const url = document.getElementById('wurl').value.trim();
   if (!key || !url) { alert('Please fill in both fields.'); return; }
-  setCookie('z_gkey', key, 365);
-  setCookie('z_wurl', url, 365);
-  // Also try localStorage as backup
-  try { localStorage.setItem('z_gkey', key); localStorage.setItem('z_wurl', url); } catch(e) {}
+  await dbSet('z_gkey', key);
+  await dbSet('z_wurl', url);
+  // Show saved confirmation
+  const btn = document.querySelector('.btn');
+  const orig = btn.textContent;
+  btn.textContent = 'Settings saved ✓';
+  btn.style.background = '#2e7d32';
+  setTimeout(() => { btn.textContent = orig; btn.style.background = ''; }, 1500);
   showChat();
 }
 
-function openSetup() {
-  document.getElementById('gkey').value = getCookie('z_gkey') || '';
-  document.getElementById('wurl').value = getCookie('z_wurl') || '';
+async function openSetup() {
+  document.getElementById('gkey').value = await dbGet('z_gkey') || '';
+  document.getElementById('wurl').value = await dbGet('z_wurl') || '';
   document.getElementById('setup').style.display = 'flex';
   document.getElementById('chat').style.display = 'none';
 }
@@ -167,8 +199,10 @@ function showChat() {
   document.getElementById('chat').style.display = 'flex';
 }
 
-window.onload = () => {
-  if (getCookie('z_gkey') && getCookie('z_wurl')) showChat();
+window.onload = async () => {
+  const gkey = await dbGet('z_gkey');
+  const wurl = await dbGet('z_wurl');
+  if (gkey && wurl) showChat();
 };
 
 async function sendQ() {
@@ -176,8 +210,8 @@ async function sendQ() {
   const question = inp.value.trim();
   if (!question) return;
 
-  const gkey = getCookie('z_gkey');
-  const wurl = getCookie('z_wurl');
+  const gkey = await dbGet('z_gkey');
+  const wurl = await dbGet('z_wurl');
   if (!gkey || !wurl) { openSetup(); return; }
 
   inp.value = '';
