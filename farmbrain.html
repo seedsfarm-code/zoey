@@ -176,20 +176,35 @@ async function saveSetup() {
   const key = document.getElementById('gkey').value.trim();
   const url = document.getElementById('wurl').value.trim();
   if (!key || !url) { alert('Please fill in both fields.'); return; }
+
+  // Save to all available storage methods
   await dbSet('z_gkey', key);
   await dbSet('z_wurl', url);
-  // Show saved confirmation
-  const btn = document.querySelector('.btn');
-  const orig = btn.textContent;
-  btn.textContent = 'Settings saved ✓';
-  btn.style.background = '#2e7d32';
-  setTimeout(() => { btn.textContent = orig; btn.style.background = ''; }, 1500);
-  showChat();
+
+  // Verify it actually saved
+  const verifyKey = await dbGet('z_gkey');
+  const verifyUrl = await dbGet('z_wurl');
+
+  if (verifyKey && verifyUrl) {
+    const btn = document.querySelector('.btn');
+    btn.textContent = 'Settings saved ✓';
+    btn.style.background = '#2e7d32';
+    setTimeout(() => showChat(), 1000);
+  } else {
+    // IndexedDB failed — try sessionStorage as last resort for this session
+    try { sessionStorage.setItem('z_gkey', key); sessionStorage.setItem('z_wurl', url); } catch(e) {}
+    alert('Saved for this session. Note: your browser may not support permanent storage for this app. You may need to re-enter next time.');
+    showChat();
+  }
 }
 
 async function openSetup() {
-  document.getElementById('gkey').value = await dbGet('z_gkey') || '';
-  document.getElementById('wurl').value = await dbGet('z_wurl') || '';
+  let gkey = await dbGet('z_gkey') || '';
+  let wurl = await dbGet('z_wurl') || '';
+  if (!gkey) { try { gkey = sessionStorage.getItem('z_gkey') || ''; } catch(e) {} }
+  if (!wurl) { try { wurl = sessionStorage.getItem('z_wurl') || ''; } catch(e) {} }
+  document.getElementById('gkey').value = gkey;
+  document.getElementById('wurl').value = wurl;
   document.getElementById('setup').style.display = 'flex';
   document.getElementById('chat').style.display = 'none';
 }
@@ -200,8 +215,11 @@ function showChat() {
 }
 
 window.onload = async () => {
-  const gkey = await dbGet('z_gkey');
-  const wurl = await dbGet('z_wurl');
+  // Try IndexedDB first, then sessionStorage
+  let gkey = await dbGet('z_gkey');
+  let wurl = await dbGet('z_wurl');
+  if (!gkey) { try { gkey = sessionStorage.getItem('z_gkey'); } catch(e) {} }
+  if (!wurl) { try { wurl = sessionStorage.getItem('z_wurl'); } catch(e) {} }
   if (gkey && wurl) showChat();
 };
 
@@ -210,8 +228,10 @@ async function sendQ() {
   const question = inp.value.trim();
   if (!question) return;
 
-  const gkey = await dbGet('z_gkey');
-  const wurl = await dbGet('z_wurl');
+  let gkey = await dbGet('z_gkey');
+  let wurl = await dbGet('z_wurl');
+  if (!gkey) { try { gkey = sessionStorage.getItem('z_gkey'); } catch(e) {} }
+  if (!wurl) { try { wurl = sessionStorage.getItem('z_wurl'); } catch(e) {} }
   if (!gkey || !wurl) { openSetup(); return; }
 
   inp.value = '';
